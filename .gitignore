@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / React
+node_modules/
+dist/
+.env
+.env.local
+*.tsbuildinfo
+
+# Docker
+*.log
+
+# IDE
+.idea/
+.vscode/

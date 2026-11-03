@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Кінематографічна тема: темно-вугільний фон, тепло-білий текст, маркізні акценти */
+body {
+  @apply bg-charcoal-950 text-ink antialiased font-sans;
+}
+
+/* Афішні заголовки в стилі кінотеатральної маркізи: розріджений трекінг, умовний (condensed) шрифт */
+.marquee-heading {
+  @apply font-display tracking-wide;
+}
+
+::selection {
+  @apply bg-accent/30 text-ink;
+}
+
+/* Видима фокус-рамка для клавіатурної навігації (доступність) */
+:focus-visible {
+  outline: 2px solid theme('colors.marquee.DEFAULT');
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

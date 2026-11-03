@@ -1,0 +1,89 @@
+
+
+# Усі значення нижче з ${...} підставляються з файлу .env у цій же папці (docker compose
+# читає його автоматично). Скопіюйте .env.example -> .env і заповніть реальними значеннями —
+# сам .env НЕ комітиться (див. .gitignore). appsettings.json в репозиторії навмисно НЕ містить
+# робочих секретів: без .env застосунок свідомо відмовиться стартувати (fail-fast), а не
+# підпише щось "тихим" публічним значенням-заглушкою.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: cineverse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cineverse
+      POSTGRES_USER: cineverse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD у .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cineverse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Порт навмисно НЕ опубліковано назовні — доступ лише з внутрішньої docker-мережі.
+    # Для локального дебагу: docker compose exec postgres psql -U cineverse -d cineverse
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: cineverse-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Порт так само не публікується — лише внутрішня мережа.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cineverse-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__PostgreSql: "Host=postgres;Port=5432;Database=cineverse;Username=cineverse;Password=${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD у .env}"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__Secret: ${JWT_SECRET:?Задайте JWT_SECRET у .env (мінімум 32 випадкових символи)}
+      PaymentGateway__WebhookSecret: ${PAYMENT_WEBHOOK_SECRET:?Задайте PAYMENT_WEBHOOK_SECRET у .env}
+      SendGrid__ApiKey: ${SENDGRID_API_KEY:-}
+      Frontend__BaseUrl: ${FRONTEND_BASE_URL:-http://localhost}
+      Cors__AllowedOrigin: ${FRONTEND_BASE_URL:-http://localhost}
+    volumes:
+      - backend_logs:/app/logs
+    # Порт не публікується напряму — увесь зовнішній трафік іде через сервіс nginx нижче,
+    # щоб не можна було випадково відкрити API в обхід reverse-proxy (див. Усунення несправностей).
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cineverse-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Так само без прямого публічного порту — лише через nginx.
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: cineverse-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80" # Єдина точка входу ззовні.
+
+volumes:
+  postgres_data:
+  backend_logs:

@@ -1,0 +1,42 @@
+name: Backend CI
+
+# Мінімальний CI-конвеєр (п.1.4 ТЗ) — формальне підтвердження, що бекенд збирається
+# і юніт-тести проходять при кожному push/PR. Запускається на GitHub-раннерах, де є
+# доступ до NuGet (на відміну від пісочниці, в якій писався цей проєкт, — див. README,
+# розділ "База даних", де пояснено цю відмінність середовищ).
+#
+# Інтеграційні тести (CineVerse.IntegrationTests) свідомо НЕ запускаються тут: їм потрібен
+# Docker-демон для Testcontainers.PostgreSql, який на стандартних GitHub-раннерах доступний,
+# але для мінімального першого CI-проходу обмежуємось швидшими unit-тестами. Розширення до
+# повного конвеєра (build+test обох проєктів, публікація Docker-образів) — Етап 10.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore CineVerse.sln
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build CineVerse.sln --no-restore --configuration Release
+
+      - name: Unit tests
+        working-directory: backend
+        run: dotnet test tests/CineVerse.UnitTests/CineVerse.UnitTests.csproj --no-build --configuration Release --logger "console;verbosity=normal"
